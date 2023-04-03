@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+from ultralytics import YOLO
+
 import numpy as np
 import json
 
@@ -27,7 +29,7 @@ from geometry_msgs.msg import PoseStamped
 
 
 rospack = rospkg.RosPack()
-pkg_path = '/home/projet-inf/Documents/NL_trajectory_reshaper'
+pkg_path = "/home/niko/projet/NL_trajectory_reshaper"
 
 
 parser = argparse.ArgumentParser(description='collect traj draw.')
@@ -35,7 +37,7 @@ parser.add_argument('--ros', type=bool, default=False)
 
 parser.add_argument('--name', type=str, default="user")
 parser.add_argument('--trial', type=int, default=1)
-parser.add_argument('--img_file', type=str, default=pkg_path+"/docs/media/top_view.png")
+parser.add_argument('--img_file', type=str, default=pkg_path+"/docs/media/new_view.png")
 parser.add_argument('--original_traj', type=str, default=pkg_path+"/original_traj.npy")
 
 parser.add_argument('--model_path', type=str, default=pkg_path+"/models/")
@@ -66,6 +68,41 @@ original_traj = np.load(args.original_traj)
 
 base_path = args.user_trajs_path
 
+def getYolo():
+
+    # Load a model
+    model = YOLO('yolov8n.pt')  # load a pretrained model (recommended for training)
+
+    # Use the model
+    res = model('./test6.jpg')  # predict on an image
+
+    results = res[0]
+    results = results.cuda()
+    results = results.cpu()
+    results = results.to("cpu")
+    results = results.numpy()
+
+
+    boxes, names = results.boxes, results.names
+
+    boxes = boxes.data.tolist()
+    # names = names.data.tolist()
+
+    dict = {}
+    dict['obj'] = []
+    dict['noms'] = []
+
+
+    for arr in boxes:
+        x1, x2, y1, y2, prob, key = arr
+        dict['noms'].append(names[key])
+        dict['obj'].append([x2-x1, y2-y1])
+        print("Coordonnées de", names[key], " : x=", x2 - x1, " y=", y2-y1, str(prob*100)[:2], "%")
+    
+    return dict
+
+objdata = getYolo()
+
 class Drawing_interface():
     def __init__(self, user_name="user", img_file=args.img_file):
 
@@ -87,8 +124,8 @@ class Drawing_interface():
         self.base_path = base_path
 
         self.obj_i = 0
-        self.obj_poses = [[477, 64], [291, 81], [271, 313]]
-        self.obj_names = ["glasses", "cellphone", "wine"]
+        self.obj_poses = objdata["obj"]
+        self.obj_names = objdata["noms"]
 
         self.points = []
         self.new_traj = []
@@ -528,3 +565,4 @@ while not rospy.is_shutdown():
 # cv2.imwrite(user_file+".png", img)
 
 cv2.destroyAllWindows()
+
